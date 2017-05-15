@@ -1,11 +1,9 @@
 import R from 'ramda'
 
-const puncutationRegex = /\./
+const puncutationRegex = /[\.\n]/
 
 const MIN_LENGTH = 3
 const MAX_LENGTH = 10
-
-
 
 class PhraseCollection {
   constructor() {
@@ -13,10 +11,14 @@ class PhraseCollection {
   }
 
   checkPhrase(words) {
+    if(this.invalidBookend(words)) {
+      return false
+    }
+
     const phrase = words.join(' ')
     const phraseMatches = R.find(R.propEq('phrase', phrase))
     const match = phraseMatches(this.phrases)
-    console.log("match", match)
+
     if(match) {
       match.count = match.count + 1
       return true
@@ -28,11 +30,18 @@ class PhraseCollection {
 
   topPhrases() {
     const duplicates = R.filter(p => p.count > 1)(this.phrases)
-    const sorted = R.sort(R.prop('count'))(duplicates)
-    return R.take(10)(sorted)
+    const sorted = R.sortWith([R.descend(R.prop('count'))])(duplicates)
+    return R.take(10, sorted)
+  }
+
+
+  invalidBookend(phrase) {
+    const regex = /^(and|or|a|the)$/
+    return R.head(phrase).match(regex) || R.last(phrase).match(regex)
   }
 
   add(sentence) {
+    sentence = sentence.trim()
     const phraseLength = R.clamp(MIN_LENGTH, MAX_LENGTH)
 
     const parse = (remaining) => {
@@ -42,7 +51,6 @@ class PhraseCollection {
         // return once the longest possible
         // phrase is found in a match
         if(this.checkPhrase(phrase)) {
-          console.log("returning .... phrase", phrase)
           return;
         }
         phrase.pop()
@@ -58,11 +66,6 @@ class PhraseCollection {
     const words = sentence.split(" ")
 
     parse(words)
-    console.log("this.phrases", this.phrases)
-  }
-
-  get top() {
-
   }
 }
 
