@@ -1,81 +1,70 @@
-import R from 'ramda'
+import R from "ramda";
 
-const puncutationRegex = /[\.\n]/
+const MIN_LENGTH = 3;
+const MAX_LENGTH = 10;
+const TOP_PHRASE_COUNT = 10;
 
-const MIN_LENGTH = 3
-const MAX_LENGTH = 10
+const puncutationRegex = /[\.\n]/;
 
-class PhraseCollection {
-  constructor() {
-    this.phrases = []
+class Parser {
+  constructor(body) {
+    this.phrases = [];
+    const sentences = body.toLowerCase().split(puncutationRegex);
+    sentences.forEach(this.parse.bind(this));
   }
 
-  checkPhrase(words) {
-    if(this.invalidBookend(words)) {
-      return false
+  recordPhrase(words) {
+    if (this.invalidBookend(words)) {
+      return null;
     }
 
-    const phrase = words.join(' ')
-    const phraseMatches = R.find(R.propEq('phrase', phrase))
-    const match = phraseMatches(this.phrases)
+    const phrase = words.join(" ");
+    const existingPhrase = R.propEq("phrase", phrase);
+    const existing = R.find(existingPhrase)(this.phrases);
 
-    if(match) {
-      match.count = match.count + 1
-      return true
+    if (existing) {
+      existing.count++;
+      return existing.phrase;
     } else {
-      this.phrases.push({phrase, count: 1})
-      return false
+      this.phrases.push({ phrase, count: 1 });
     }
   }
 
   topPhrases() {
-    const duplicates = R.filter(p => p.count > 1)(this.phrases)
-    const sorted = R.sortWith([R.descend(R.prop('count'))])(duplicates)
-    return R.take(10, sorted)
+    const repeats = R.filter(p => p.count > 1)(this.phrases);
+    const sorted = R.sortWith([R.descend(R.prop("count"))])(repeats);
+    return R.take(TOP_PHRASE_COUNT, sorted);
   }
-
 
   invalidBookend(phrase) {
-    const regex = /^(and|or|a|the)$/
-    return R.head(phrase).match(regex) || R.last(phrase).match(regex)
+    const regex = /^(and|or|a|the)$/;
+    return R.head(phrase).match(regex) || R.last(phrase).match(regex);
   }
 
-  add(sentence) {
-    sentence = sentence.trim()
-    const phraseLength = R.clamp(MIN_LENGTH, MAX_LENGTH)
+  parse(sentence) {
+    sentence = sentence.trim();
+    const words = sentence.split(" ");
 
-    const parse = (remaining) => {
-      let phrase = R.take(MAX_LENGTH)(remaining)
+    const parse = remaining => {
+      let phrase = R.take(MAX_LENGTH)(remaining);
 
-      while(phrase.length >= MIN_LENGTH) {
-        // return once the longest possible
-        // phrase is found in a match
-        if(this.checkPhrase(phrase)) {
-          return;
+      while (phrase.length >= MIN_LENGTH) {
+        if (this.recordPhrase(phrase)) {
+          const tail = R.drop(phrase.length)(remaining);
+          return tail.length >= MIN_LENGTH ? parse(tail) : null;
         }
-        phrase.pop()
+        phrase.pop();
       }
 
       if (remaining.length > MIN_LENGTH) {
-        parse(R.tail(remaining))
+        parse(R.tail(remaining));
       }
-    }
+    };
 
-    parse.bind(this)
+    parse.bind(this);
 
-    const words = sentence.split(" ")
-
-    parse(words)
+    parse(words);
   }
 }
 
-class Parser {
-  constructor(body) {
-    let collection = new PhraseCollection
-    this.sentences = body.toLowerCase().split(puncutationRegex)
-    this.sentences.forEach(collection.add.bind(collection))
-    this.phrases = collection.topPhrases()
-  }
-}
-
-export default Parser
+export default Parser;
